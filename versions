@@ -1,0 +1,1262 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "#from scipy import signal\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "sns.set()\n",
+    "%matplotlib inline"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = pd.read_csv('NHSE_data.csv')\n",
+    "df.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df['flag_previous'] = 0\n",
+    "\n",
+    "df.loc[0:68,'flag_previous'] = 1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[df.flag_previous == 1] # remove most recent data to reproduce previosu analysis"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[['total_breaches','total_dtocs']]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy import stats"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# get coeffs of linear fit\n",
+    "slope, intercept, r_value, p_value, std_err = stats.linregress(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig, ax = plt.subplots(figsize=(6,5))\n",
+    "y = df['total_breaches']\n",
+    "x = df['total_dtocs']\n",
+    "plt.plot(x,y,'o', label='monthly data')\n",
+    "plt.plot(df['total_dtocs'], intercept + slope*x, 'r', label='fitted line: R$^2$ = {0:.2f}'.format(r_value**2))\n",
+    "plt.legend(frameon=True,fontsize='large')\n",
+    "ax.set_xlabel('number of DTOCs')\n",
+    "ax.set_ylabel('number of breaches')\n",
+    "#plt.\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig.savefig('original.png',dpi=600)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "r_value**2"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.total_dtocs.hist(bins=20);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.total_breaches.hist(bins=20);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df[['total_dtocs','total_breaches']].corr('spearman')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy.stats.stats import pearsonr"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pearsonr(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy.stats.stats import spearmanr"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "spearmanr(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def auto_corr(df,column,lags,how='spearman'):\n",
+    "    \n",
+    "    #### get lagged cols\n",
+    "    dftemp = pd.DataFrame(df[column])\n",
+    "    result = dftemp.copy()\n",
+    "    #result = pd.DataFrame()\n",
+    "    \n",
+    "    #### create new columns with shifted vars\n",
+    "    for i in np.arange(1,lags):\n",
+    "\n",
+    "        dftemp2 = dftemp.shift(i).copy() # get new series with shoifted data\n",
+    "        dftemp2.rename(columns={column:str(i)},inplace=True) #rename col to lag no\n",
+    "        result  = result.merge(dftemp2, how='outer',left_index=True,right_index=True) # merge with running results df\n",
+    "        \n",
+    "    # calc correlation coef nad get table of results\n",
+    "    result_corr = result.corr(how)[column].reset_index(drop=True)\n",
+    "    return(result_corr)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def compute_crosscorr_mult_inputs(df,xvars,lags,title='', how='spearman'):\n",
+    "    ''' create df with lagged correlation scores (auto-correlation) for multiple variables'''\n",
+    "    \n",
+    "    corr_scores = pd.DataFrame()\n",
+    "    for i in xvars:\n",
+    "        corrs = auto_corr(df,i,lags,how)\n",
+    "        corr_scores[i] = corrs\n",
+    "    ax = plt.subplot()\n",
+    "    corr_scores.plot(ax=ax)\n",
+    "    ax.set_ylabel('correlation coef')\n",
+    "    ax.set_xlabel('lag (months)')\n",
+    "    ax.set_ylim([-0.4,1])\n",
+    "    ax.plot((0,corr_scores.shape[0]),(0,0),'k--') # plot 0 line\n",
+    "    ax.set_title(title)\n",
+    "    return(corr_scores)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "corr_scores = compute_crosscorr_mult_inputs(df,['total_breaches','total_dtocs'],18,how='spearman')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "corr_scores = compute_crosscorr_mult_inputs(df,['total_breaches','total_dtocs'],18,how='pearson')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from statsmodels.tsa.stattools import adfuller"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def check_stationarity(series):\n",
+    "    result = adfuller(series)\n",
+    "    print('ADF Statistic: %f' % result[0])\n",
+    "    print('p-value: %f' % result[1])\n",
+    "    for key, value in result[4].items():\n",
+    "        print('\\t%s: %.3f' % (key, value))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_dtocs'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig = plt.figure() # Create matplotlib figure\n",
+    "\n",
+    "ax = fig.add_subplot(111) # Create matplotlib axes\n",
+    "ax2 = ax.twinx() # Create another axes that shares the same x-axis as ax.\n",
+    "\n",
+    "df.total_breaches.plot(color='red', ax=ax)#, width=width)#, position=1)\n",
+    "df.total_dtocs.plot(color='blue', ax=ax2)\n",
+    "\n",
+    "ax.set_ylabel('Number of breaches')\n",
+    "ax2.set_ylabel('Number of dtocs')\n",
+    "ax2.grid(b=False)\n",
+    "\n",
+    "#sort legend\n",
+    "lns = ax.get_lines()+ax2.get_lines()\n",
+    "ax.legend(lns,['breaches','DTOCs'],frameon=True)\n",
+    "\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import scipy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def func_dtoc(x, a, b, c):\n",
+    "    return (a * x) + (b * x**2) + c"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def detrend_using_func(dta,column,func,ylabel,color='b'):\n",
+    "    \n",
+    "    #### fit func\n",
+    "    xdata = dta.index\n",
+    "    ydata = dta[column]\n",
+    "    popt, pcov = scipy.optimize.curve_fit(func, xdata, ydata)\n",
+    "    \n",
+    "    #### plot fig\n",
+    "    fig = plt.figure() # Create matplotlib figure\n",
+    "\n",
+    "    ax = fig.add_subplot(111) # Create matplotlib axes\n",
+    "    df[column].plot(color=color, ax=ax, label=ylabel)#, width=width)#, position=0)\n",
+    "    plt.plot(xdata, func(xdata, *popt), color+ '--',\n",
+    "              label='fit:a=%5.3f,  b=%5.3f, c=%5.3f' % tuple(popt)) #\n",
+    "\n",
+    "    ax.set_ylabel(ylabel)\n",
+    "    ax.legend(frameon=True)\n",
+    "    plt.show()\n",
+    "    \n",
+    "    #### make new column with detrended data\n",
+    "    dta.loc[dta.index,column+'_detrend'] = dta[column] - func(dta[column].index,popt[0],popt[1],popt[2])\n",
+    "    \n",
+    "    return dta"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = detrend_using_func(df,'total_dtocs',func_dtoc,'number of DTOCs')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = detrend_using_func(df,'total_breaches',func_dtoc,'number of breaches','r')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig = plt.figure() # Create matplotlib figure\n",
+    "\n",
+    "ax = fig.add_subplot(111) # Create matplotlib axes\n",
+    "ax2 = ax.twinx() # Create another axes that shares the same x-axis as ax.\n",
+    "\n",
+    "df.total_breaches_detrend.plot(color='red', ax=ax)#, width=width)#, position=1)\n",
+    "df.total_dtocs_detrend.plot(color='blue', ax=ax2)\n",
+    "\n",
+    "ax.set_ylabel('Number of breaches')\n",
+    "ax2.set_ylabel('Number of dtocs')\n",
+    "ax2.grid(b=False)\n",
+    "\n",
+    "#sort legend\n",
+    "lns = ax.get_lines()+ax2.get_lines()\n",
+    "ax2.legend(lns,['breaches','DTOCs'],frameon=True)\n",
+    "\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_breaches_detrend'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_dtocs_detrend'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 38,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.diff()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "#from scipy import signal\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "sns.set()\n",
+    "%matplotlib inline"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 40,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = pd.read_csv('NHSE_data.csv')\n",
+    "df.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 41,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 42,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df['flag_previous'] = 0\n",
+    "\n",
+    "df.loc[0:68,'flag_previous'] = 1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 43,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[df.flag_previous == 1] # remove most recent data to reproduce previosu analysis"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 44,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[['total_breaches','total_dtocs']]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 45,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy import stats"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 46,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# get coeffs of linear fit\n",
+    "slope, intercept, r_value, p_value, std_err = stats.linregress(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 47,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig, ax = plt.subplots(figsize=(6,5))\n",
+    "y = df['total_breaches']\n",
+    "x = df['total_dtocs']\n",
+    "plt.plot(x,y,'o', label='monthly data')\n",
+    "plt.plot(df['total_dtocs'], intercept + slope*x, 'r', label='fitted line: R$^2$ = {0:.2f}'.format(r_value**2))\n",
+    "plt.legend(frameon=True,fontsize='large')\n",
+    "ax.set_xlabel('number of DTOCs')\n",
+    "ax.set_ylabel('number of breaches')\n",
+    "#plt.\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 48,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig.savefig('original.png',dpi=600)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 49,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "r_value**2"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 50,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.total_dtocs.hist(bins=20);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 51,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.total_breaches.hist(bins=20);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 52,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df[['total_dtocs','total_breaches']].corr('spearman')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 53,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy.stats.stats import pearsonr"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 54,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pearsonr(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy.stats.stats import spearmanr"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 56,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "spearmanr(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 57,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def auto_corr(df,column,lags,how='spearman'):\n",
+    "    \n",
+    "    #### get lagged cols\n",
+    "    dftemp = pd.DataFrame(df[column])\n",
+    "    result = dftemp.copy()\n",
+    "    #result = pd.DataFrame()\n",
+    "    \n",
+    "    #### create new columns with shifted vars\n",
+    "    for i in np.arange(1,lags):\n",
+    "\n",
+    "        dftemp2 = dftemp.shift(i).copy() # get new series with shoifted data\n",
+    "        dftemp2.rename(columns={column:str(i)},inplace=True) #rename col to lag no\n",
+    "        result  = result.merge(dftemp2, how='outer',left_index=True,right_index=True) # merge with running results df\n",
+    "        \n",
+    "    # calc correlation coef nad get table of results\n",
+    "    result_corr = result.corr(how)[column].reset_index(drop=True)\n",
+    "    return(result_corr)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 58,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def compute_crosscorr_mult_inputs(df,xvars,lags,title='', how='spearman'):\n",
+    "    ''' create df with lagged correlation scores (auto-correlation) for multiple variables'''\n",
+    "    \n",
+    "    corr_scores = pd.DataFrame()\n",
+    "    for i in xvars:\n",
+    "        corrs = auto_corr(df,i,lags,how)\n",
+    "        corr_scores[i] = corrs\n",
+    "    ax = plt.subplot()\n",
+    "    corr_scores.plot(ax=ax)\n",
+    "    ax.set_ylabel('correlation coef')\n",
+    "    ax.set_xlabel('lag (months)')\n",
+    "    ax.set_ylim([-0.4,1])\n",
+    "    ax.plot((0,corr_scores.shape[0]),(0,0),'k--') # plot 0 line\n",
+    "    ax.set_title(title)\n",
+    "    return(corr_scores)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 59,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "corr_scores = compute_crosscorr_mult_inputs(df,['total_breaches','total_dtocs'],18,how='spearman')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 60,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "corr_scores = compute_crosscorr_mult_inputs(df,['total_breaches','total_dtocs'],18,how='pearson')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 61,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from statsmodels.tsa.stattools import adfuller"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 62,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def check_stationarity(series):\n",
+    "    result = adfuller(series)\n",
+    "    print('ADF Statistic: %f' % result[0])\n",
+    "    print('p-value: %f' % result[1])\n",
+    "    for key, value in result[4].items():\n",
+    "        print('\\t%s: %.3f' % (key, value))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 63,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 64,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_dtocs'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 65,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig = plt.figure() # Create matplotlib figure\n",
+    "\n",
+    "ax = fig.add_subplot(111) # Create matplotlib axes\n",
+    "ax2 = ax.twinx() # Create another axes that shares the same x-axis as ax.\n",
+    "\n",
+    "df.total_breaches.plot(color='red', ax=ax)#, width=width)#, position=1)\n",
+    "df.total_dtocs.plot(color='blue', ax=ax2)\n",
+    "\n",
+    "ax.set_ylabel('Number of breaches')\n",
+    "ax2.set_ylabel('Number of dtocs')\n",
+    "ax2.grid(b=False)\n",
+    "\n",
+    "#sort legend\n",
+    "lns = ax.get_lines()+ax2.get_lines()\n",
+    "ax.legend(lns,['breaches','DTOCs'],frameon=True)\n",
+    "\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 66,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import scipy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 67,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def func_dtoc(x, a, b, c):\n",
+    "    return (a * x) + (b * x**2) + c"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 68,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def detrend_using_func(dta,column,func,ylabel,color='b'):\n",
+    "    \n",
+    "    #### fit func\n",
+    "    xdata = dta.index\n",
+    "    ydata = dta[column]\n",
+    "    popt, pcov = scipy.optimize.curve_fit(func, xdata, ydata)\n",
+    "    \n",
+    "    #### plot fig\n",
+    "    fig = plt.figure() # Create matplotlib figure\n",
+    "\n",
+    "    ax = fig.add_subplot(111) # Create matplotlib axes\n",
+    "    df[column].plot(color=color, ax=ax, label=ylabel)#, width=width)#, position=0)\n",
+    "    plt.plot(xdata, func(xdata, *popt), color+ '--',\n",
+    "              label='fit:a=%5.3f,  b=%5.3f, c=%5.3f' % tuple(popt)) #\n",
+    "\n",
+    "    ax.set_ylabel(ylabel)\n",
+    "    ax.legend(frameon=True)\n",
+    "    plt.show()\n",
+    "    \n",
+    "    #### make new column with detrended data\n",
+    "    dta.loc[dta.index,column+'_detrend'] = dta[column] - func(dta[column].index,popt[0],popt[1],popt[2])\n",
+    "    \n",
+    "    return dta"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 69,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = detrend_using_func(df,'total_dtocs',func_dtoc,'number of DTOCs')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 70,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = detrend_using_func(df,'total_breaches',func_dtoc,'number of breaches','r')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 71,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig = plt.figure() # Create matplotlib figure\n",
+    "\n",
+    "ax = fig.add_subplot(111) # Create matplotlib axes\n",
+    "ax2 = ax.twinx() # Create another axes that shares the same x-axis as ax.\n",
+    "\n",
+    "df.total_breaches_detrend.plot(color='red', ax=ax)#, width=width)#, position=1)\n",
+    "df.total_dtocs_detrend.plot(color='blue', ax=ax2)\n",
+    "\n",
+    "ax.set_ylabel('Number of breaches')\n",
+    "ax2.set_ylabel('Number of dtocs')\n",
+    "ax2.grid(b=False)\n",
+    "\n",
+    "#sort legend\n",
+    "lns = ax.get_lines()+ax2.get_lines()\n",
+    "ax2.legend(lns,['breaches','DTOCs'],frameon=True)\n",
+    "\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 72,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_breaches_detrend'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 73,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "check_stationarity(df['total_dtocs_detrend'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 74,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# get coeffs of linear fit\n",
+    "slope, intercept, r_value, p_value, std_err = stats.linregress(df['total_dtocs_detrend'],df['total_breaches_detrend'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 75,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig, ax = plt.subplots(figsize=(6,5))\n",
+    "y = df['total_breaches_detrend']\n",
+    "x = df['total_dtocs_detrend']\n",
+    "plt.plot(x,y,'o', label='monthly data')\n",
+    "plt.plot(x, intercept + slope*x, 'r', label='fitted line: R$^2$ = {0:.2f}'.format(r_value**2))\n",
+    "plt.legend(frameon=True,fontsize='large')\n",
+    "ax.set_xlabel('number of DTOCs')\n",
+    "ax.set_ylabel('number of breaches')\n",
+    "#plt.\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 76,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig.savefig('detrended.png',dpi=600)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 77,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.total_breaches_detrend.hist(bins=20)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 78,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.total_dtocs_detrend.hist(bins=20)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 79,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "xdata=df['total_breaches']\n",
+    "ydata=df['total_dtocs']\n",
+    "\n",
+    "from scipy.stats.stats import spearmanr\n",
+    "from scipy.stats.stats import pearsonr\n",
+    "\n",
+    "def test_corrs(xdata,ydata,test):\n",
+    "    result = test(xdata,ydata)\n",
+    "    return(result)\n",
+    "\n",
+    "def create_test_df(df):\n",
+    "    index =[]\n",
+    "    corrs = []\n",
+    "    ps = []\n",
+    "    \n",
+    "    corr,p = test_corrs(df['total_breaches'],df['total_dtocs'],pearsonr)\n",
+    "    index.append('original (pearson)')\n",
+    "    corrs.append(corr)\n",
+    "    ps.append(p)\n",
+    "    \n",
+    "    \n",
+    "    corr,p = test_corrs(df['total_breaches'],df['total_dtocs'],spearmanr)\n",
+    "    index.append('original (spearman)')\n",
+    "    corrs.append(corr)\n",
+    "    ps.append(p)\n",
+    "    \n",
+    "    corr,p = test_corrs(df['total_breaches_detrend'],df['total_dtocs_detrend'],pearsonr)\n",
+    "    index.append('detrended (pearson)')\n",
+    "    corrs.append(corr)\n",
+    "    ps.append(p)\n",
+    "    \n",
+    "    \n",
+    "    \n",
+    "    corr,p = test_corrs(df['total_breaches_detrend'],df['total_dtocs_detrend'],spearmanr)\n",
+    "    index.append('detrended (spearman)')\n",
+    "    corrs.append(corr)\n",
+    "    ps.append(p)\n",
+    "    \n",
+    "    \n",
+    "    result = pd.DataFrame(data={'correlations':corrs,'p_values':ps},index=index)\n",
+    "    return(result)\n",
+    "    \n",
+    "corrs = create_test_df(df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 80,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "corrs.round(4)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 81,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[['total_breaches','total_dtocs']] # select only variables of interest"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 82,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "from scipy import stats\n",
+    "#from scipy import signal\n",
+    "\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "\n",
+    "sns.set()\n",
+    "%matplotlib inline"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 83,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = pd.read_csv('NHSE_data.csv')\n",
+    "df.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 84,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 85,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df['flag_previous'] = 0\n",
+    "\n",
+    "df.loc[0:68,'flag_previous'] = 1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 86,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[df.flag_previous == 1] "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 87,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[['total_breaches','total_dtocs']] # select only variables of interest"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 88,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# get coeffs of linear fit\n",
+    "slope, intercept, r_value, p_value, std_err = stats.linregress(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 89,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig, ax = plt.subplots(figsize=(6,5))\n",
+    "y = df['total_breaches']\n",
+    "x = df['total_dtocs']\n",
+    "plt.plot(x,y,'o', label='monthly data')\n",
+    "plt.plot(df['total_dtocs'], intercept + slope*x, 'r', label='fitted line: R$^2$ = {0:.2f}'.format(r_value**2))\n",
+    "plt.legend(frameon=True,fontsize='large')\n",
+    "ax.set_xlabel('number of DTOCs')\n",
+    "ax.set_ylabel('number of breaches')\n",
+    "#plt.\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 90,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig.savefig('original.png',dpi=600) # save fig for paper"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 91,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "r_value**2"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 92,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "(r_value**2).round(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 93,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.hist()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 94,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.hist();"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 95,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pearsonr(df['total_dtocs'],df['total_breaches']).round(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 96,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pearsonr(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 97,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy.stats.stats import pearsonr"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 98,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pearsonr(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 99,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from scipy.stats.stats import spearmanr"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 100,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "spearmanr(df['total_dtocs'],df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 101,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import scipy\n",
+    "from scipy import stats\n",
+    "\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "\n",
+    "sns.set()\n",
+    "%matplotlib inline"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 102,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import statsmodels"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 103,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "statsmodels.graphics.tsaplots.plot_acf(df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 104,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "statsmodels.tsa.stattools.acf(df['total_breaches'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 105,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "statsmodels.tsa.stattools.acf(df['total_breaches'],alpha=0.05)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 106,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "statsmodels.graphics.tsaplots.plot_acf()"
+   ]
+  }
+ ],
+ "metadata": {},
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
